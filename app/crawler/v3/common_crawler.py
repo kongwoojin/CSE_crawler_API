@@ -70,6 +70,15 @@ async def article_parser(department: Department, session, data: Board):
 
                     file_list.append(file_dic)
 
+                client.query("""
+                    update notice
+                    filter .department=<Department><str>$department AND .board=<Board><str>$board AND
+                      .is_notice=true
+                    set {
+                      is_notice := false
+                    };
+                """, department=department.department, board=board)
+
                 try:
                     client.query("""
                     insert notice {

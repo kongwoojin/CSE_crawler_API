@@ -76,6 +76,15 @@ async def article_parser(department: Department, session, data: Board):
                 except AttributeError as e:
                     crawling_log.attribute_exception_error(data.article_url, e)
 
+                client.query("""
+                    update notice
+                    filter .department=<Department><str>$department AND .board=<Board><str>$board AND
+                      .is_notice=true
+                    set {
+                      is_notice := false
+                    };
+                """, department=department.department, board=board)
+
                 try:
                     client.query("""
                     insert notice {
