@@ -194,8 +194,9 @@ async def board_page_crawler(session, department: Department, board_index: int, 
                         date_of_last_article = write_date_parsed
 
                         # If article older than 7 days, pass it
-                        if not ignore_date and (datetime.today() - timedelta(days=7) > write_date_parsed):
-                            continue
+                        if not (ignore_date and (datetime.today() - timedelta(days=7) > write_date_parsed)):
+                            if not is_notice:  # If article is notice, don't pass
+                                continue
 
                         board_list.append(Board(
                             board=department.boards[board_index].name,
