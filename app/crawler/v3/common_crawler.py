@@ -70,15 +70,6 @@ async def article_parser(department: Department, session, data: Board):
 
                     file_list.append(file_dic)
 
-                client.query("""
-                    update notice
-                    filter .department=<Department><str>$department AND .board=<Board><str>$board AND
-                      .is_notice=true
-                    set {
-                      is_notice := false
-                    };
-                """, department=department.department, board=board)
-
                 try:
                     client.query("""
                     insert notice {
@@ -229,6 +220,19 @@ async def board_page_crawler(session, department: Department, board_index: int, 
             return board_list
 
 
+async def board_remove_notice(department: Department, board: str):
+    client = edgedb_client()
+
+    client.query("""
+        update notice
+        filter .department=<Department><str>$department AND .board=<Board><str>$board AND
+          .is_notice=true
+        set {
+          is_notice := false
+        };
+    """, department=department.department, board=board)
+
+
 async def board_crawler(department: Department, board_index: int, start_page: int, last_page: int):
     # limit TCPConnector to 10 for avoid ServerDisconnectedError
     # Enable force_close to disable HTTP Keep-Alive
@@ -273,6 +277,9 @@ async def board_crawler_task(department, session, board_list):
 
 async def sched_board_crawler(department: Department, board_index: int):
     old_count = get_article_count(department, department.boards[board_index].board)
+
+    # Before start crawling, remove all notice
+    await board_remove_notice(department, department.boards[board_index].board)
 
     # limit TCPConnector to 10 for avoid ServerDisconnectedError
     # Enable force_close to disable HTTP Keep-Alive

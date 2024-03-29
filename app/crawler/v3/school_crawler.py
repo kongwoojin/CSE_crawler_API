@@ -76,15 +76,6 @@ async def article_parser(department: Department, session, data: Board):
                 except AttributeError as e:
                     crawling_log.attribute_exception_error(data.article_url, e)
 
-                client.query("""
-                    update notice
-                    filter .department=<Department><str>$department AND .board=<Board><str>$board AND
-                      .is_notice=true
-                    set {
-                      is_notice := false
-                    };
-                """, department=department.department, board=board)
-
                 try:
                     client.query("""
                     insert notice {
@@ -189,6 +180,12 @@ async def board_page_crawler(session, department: Department, board_index: int, 
 
                 for post in posts:
                     try:
+                        notice_icon = post.find("i", class_="icon_notice")
+                        if notice_icon:
+                            is_notice = True
+                        else:
+                            is_notice = False
+
                         article_url_parsed = post.select_one("td.txt_left > a").get('href')
                         article_url_parsed = f"https://koreatech.ac.kr{article_url_parsed}"
                         write_date_parsed = post.select_one(
@@ -196,12 +193,6 @@ async def board_page_crawler(session, department: Department, board_index: int, 
                         write_date_parsed = datetime.strptime(write_date_parsed, '%Y-%m-%d')
 
                         date_of_last_article = write_date_parsed
-
-                        notice_icon = post.find("i", class_="icon_notice")
-                        if notice_icon:
-                            is_notice = True
-                        else:
-                            is_notice = False
 
                         # If article older than 7 days, pass it
                         if not (ignore_date and (datetime.today() - timedelta(days=7) > write_date_parsed)):
@@ -229,6 +220,19 @@ async def board_page_crawler(session, department: Department, board_index: int, 
         else:
             board_list.extend(await board_page_crawler(session, department, board_index, page + 1))
             return board_list
+
+
+async def board_remove_notice(department: Department, board: str):
+    client = edgedb_client()
+
+    client.query("""
+        update notice
+        filter .department=<Department><str>$department AND .board=<Board><str>$board AND
+          .is_notice=true
+        set {
+          is_notice := false
+        };
+    """, department=department.department, board=board)
 
 
 async def board_crawler(department: Department, board_index: int, start_page: int, last_page: int):
@@ -275,6 +279,9 @@ async def board_crawler_task(department, session, board_list):
 
 async def sched_board_crawler(department: Department, board_index: int):
     old_count = get_article_count(department, department.boards[board_index].board)
+
+    # Before start crawling, remove all notice
+    await board_remove_notice(department, department.boards[board_index].board)
 
     # limit TCPConnector to 10 for avoid ServerDisconnectedError
     # Enable force_close to disable HTTP Keep-Alive
