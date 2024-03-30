@@ -22,7 +22,7 @@ class Board(Enum):
 
 archBoard = [Board.NOTICE, Board.JOB, Board.FREE]
 cseBoard = [Board.NOTICE, Board.LECTURE, Board.JOB, Board.PDS]
-dormBoard = [Board.NOTICE, Board.FREE]
+dormBoard = [Board.NOTICE]
 mseBoard = [Board.NOTICE, Board.BACHELOR, Board.PDS]
 aceBoard = [Board.NOTICE, Board.BACHELOR, Board.JOB, Board.PDS]
 ideBoard = [Board.NOTICE, Board.JOB]
