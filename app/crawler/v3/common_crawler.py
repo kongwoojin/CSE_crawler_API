@@ -16,6 +16,7 @@ from app.dataclass.enums.department import Department
 from app.db.v3 import edgedb_client
 from app.firebase.send_message import send_fcm_message
 from app.logs import crawling_log
+from app.logs.crawling_log import cannot_read_article_error
 
 
 async def article_parser(department: Department, session, data: Board):
@@ -40,35 +41,39 @@ async def article_parser(department: Department, session, data: Board):
 
                 file_list = []
 
-                title_parsed = soup.select_one(
-                    "#contents_body > article.board_view > h2").text.strip()
-                text_parsed = soup.select_one(
-                    "#contents_body > article.board_view > div.contents").decode_contents()
-                text_parsed = text_parsed.replace("<img", "<br><img")
+                try:
+                    title_parsed = soup.select_one(
+                        "#contents_body > article.board_view > h2").text.strip()
+                    text_parsed = soup.select_one(
+                        "#contents_body > article.board_view > div.contents").decode_contents()
+                    text_parsed = text_parsed.replace("<img", "<br><img")
 
-                writer_parsed = soup.select_one(
-                    "#contents_body > article.board_view > ul > li:nth-child(1) > span") \
-                    .text.strip()
-                write_date_parsed = soup.select_one(
-                    "#contents_body > article.board_view > ul > li.date > span").text.strip()
-                write_date_parsed = datetime.strptime(write_date_parsed, '%Y.%m.%d')
-                read_count_parsed = soup.select_one(
-                    "#contents_body > article.board_view > ul > li.hit > span").text.strip().replace(",", "")
-                read_count_parsed = int(read_count_parsed)
+                    writer_parsed = soup.select_one(
+                        "#contents_body > article.board_view > ul > li:nth-child(1) > span") \
+                        .text.strip()
+                    write_date_parsed = soup.select_one(
+                        "#contents_body > article.board_view > ul > li.date > span").text.strip()
+                    write_date_parsed = datetime.strptime(write_date_parsed, '%Y.%m.%d')
+                    read_count_parsed = soup.select_one(
+                        "#contents_body > article.board_view > ul > li.hit > span").text.strip().replace(",", "")
+                    read_count_parsed = int(read_count_parsed)
 
-                files = soup.select("#contents_body > article.board_view > div.file > ul > li")
+                    files = soup.select("#contents_body > article.board_view > div.file > ul > li")
 
-                for file in files:
-                    file_url = file.select_one("a")["href"]
-                    file_name = file.select_one("a").text.strip()
-                    file_name = re.sub("\[.*]", "", file_name).strip()
+                    for file in files:
+                        file_url = file.select_one("a")["href"]
+                        file_name = file.select_one("a").text.strip()
+                        file_name = re.sub("\[.*]", "", file_name).strip()
 
-                    file_dic = {
-                        "file_url": file_url,
-                        "file_name": file_name
-                    }
+                        file_dic = {
+                            "file_url": file_url,
+                            "file_name": file_name
+                        }
 
-                    file_list.append(file_dic)
+                        file_list.append(file_dic)
+                except AttributeError:
+                    cannot_read_article_error(data.article_url)
+                    return
 
                 try:
                     client.query("""

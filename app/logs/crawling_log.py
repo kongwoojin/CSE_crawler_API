@@ -16,6 +16,10 @@ def no_article_error(url):
     print("{} {:<24}: No article at {}".format(current_time(), caller, url))
 
 
+def cannot_read_article_error(url):
+    caller = os.path.splitext(os.path.basename(inspect.stack()[1].filename))[0]
+    print("{} {:<24}: Cannot read article  {}".format(current_time(), caller, url))
+
 def unknown_exception_error(exception):
     caller = os.path.splitext(os.path.basename(inspect.stack()[1].filename))[0]
     print("{} {:<24}: {}".format(current_time(), caller, exception))

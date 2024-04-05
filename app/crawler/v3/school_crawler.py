@@ -73,8 +73,9 @@ async def article_parser(department: Department, session, data: Board):
                         }
 
                         file_list.append(file_dic)
-                except AttributeError as e:
-                    crawling_log.attribute_exception_error(data.article_url, e)
+                except AttributeError:
+                    crawling_log.cannot_read_article_error(data.article_url)
+                    return
 
                 try:
                     client.query("""
