@@ -1,4 +1,5 @@
 from rocketry import Rocketry
+from rocketry.conditions.api import time_of_week
 from rocketry.conds import every
 
 import sys
@@ -13,7 +14,9 @@ from app.firebase.init_firebase import init_firebase
 app = Rocketry(execution="async")
 
 
-@app.task(every('3 hours', based="finish"))
+# Don't run the crawler on weekends
+# Because notices are not updated on weekends
+@app.task(every('3 hours', based="finish") & time_of_week.between("Mon", "Fri"))
 async def crawler():
     await main_crawler()
 
