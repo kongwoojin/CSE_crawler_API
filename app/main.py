@@ -21,6 +21,14 @@ async def crawler():
     await main_crawler()
 
 
+# Run this crawler on weekends
+# Because notices are not updated on weekends
+# This crawler is for missing notice's of weekdays
+@app.task(every('12 hours', based="finish") & time_of_week.between("Sat", "Sun"))
+async def weekend_crawler():
+    await main_crawler()
+
+
 if __name__ == "__main__":
     init_firebase()
     app.run()
