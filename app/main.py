@@ -16,7 +16,7 @@ app = Rocketry(execution="async")
 
 # Don't run the crawler on weekends
 # Because notices are not updated on weekends
-@app.task(every('3 hours', based="finish") & time_of_week.between("Mon", "Fri"), execution="async")
+@app.task(every('3 hours', based="finish") & time_of_week.between("Mon", "Fri"))
 async def crawler():
     await main_crawler()
 
