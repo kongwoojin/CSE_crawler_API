@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 import edgedb
 
-from app.crawler.v3 import headers, gather_with_concurrency, ServerRefusedError
+from app.crawler.v3 import headers, gather_with_concurrency, ServerRefusedError, DAYS_TO_PARSE
 from app.crawler.v3.utils.get_article_count import get_article_count
 from app.dataclass.board import Board
 from app.dataclass.enums.department import Department
@@ -199,7 +199,7 @@ async def board_page_crawler(session, department: Department, board_index: int, 
                         date_of_last_article = write_date_parsed
 
                         # If article older than 7 days, pass it
-                        if not ignore_date and (datetime.today() - timedelta(days=7) > write_date_parsed):
+                        if not ignore_date and (datetime.today() - timedelta(days=DAYS_TO_PARSE) > write_date_parsed):
                             if not is_notice:  # If article is notice, don't pass
                                 continue
 
