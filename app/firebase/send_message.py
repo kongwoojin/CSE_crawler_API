@@ -38,7 +38,6 @@ async def send_fcm_message(department: Department, board: str):
             messages.append(
                 messaging.Message(
                     token=token,
-                    notification=messaging.Notification(),
                     data=data
                 )
             )
@@ -46,7 +45,6 @@ async def send_fcm_message(department: Department, board: str):
         messages.append(
             messaging.Message(
                 topic=department.department.lower(),
-                notification=messaging.Notification(),
                 data=data,
             )
         )
