@@ -2,11 +2,6 @@ from rocketry import Rocketry
 from rocketry.conditions.api import time_of_week, time_of_day
 from rocketry.conds import every
 
-import sys
-from os import path
-
-sys.path.append(path.abspath('.'))
-
 from app.crawler.v3.main import main_crawler
 from app.firebase.init_firebase import init_firebase
 
