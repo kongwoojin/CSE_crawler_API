@@ -190,7 +190,7 @@ async def board_page_crawler(session, department: Department, board_index: int, 
                             article_url_parsed = post.select_one("td.txt_left > strong > a").get("href")
                         else:
                             article_url_parsed = post.select_one("td.txt_left > a").get("href")
-                        article_url_parsed = f"https://koreatech.ac.kr{article_url_parsed}"
+                        article_url_parsed = f"https://www.koreatech.ac.kr{article_url_parsed}"
                         article_url_parsed = re.sub("&nPage=\d*", "", article_url_parsed)
                         write_date_parsed = post.select_one(
                             f"td:nth-child({len(post.find_all('td')) - 2})").text.strip()
