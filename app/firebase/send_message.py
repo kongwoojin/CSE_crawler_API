@@ -13,7 +13,13 @@ from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv(usecwd=True))
 
 is_development = bool(os.getenv("IS_DEVELOPMENT"))
-dev_tokens = os.getenv("FCM.DEV.TOKEN").split("\n")
+
+
+def generate_fcm_topic(department: Department):
+    if is_development:
+        return f"development_{department.department.lower()}"
+    else:
+        return department.department.lower()
 
 
 async def send_fcm_message(department: Department, board: str):
@@ -31,23 +37,10 @@ async def send_fcm_message(department: Department, board: str):
         "new_articles": ':'.join(article_id_list)
     }
 
-    messages = []
-
-    if is_development:
-        for token in dev_tokens:
-            messages.append(
-                messaging.Message(
-                    token=token,
-                    data=data
-                )
-            )
-    else:
-        messages.append(
-            messaging.Message(
-                topic=department.department.lower(),
-                data=data,
-            )
-        )
+    messages = [messaging.Message(
+        topic=generate_fcm_topic(department),
+        data=data,
+    )]
 
     try:
         response = messaging.send_each(messages)
