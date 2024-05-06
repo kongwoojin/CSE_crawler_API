@@ -12,7 +12,7 @@ async def main_common_crawler():
     for department in departmentList:
         for index in range(0, department.board_len()):
             for i in range(1, await get_common_last_page(*department.code[index]) + 1):
-                await common_crawler.board_crawler(department, index, i, i)
+                await common_crawler.manual_board_crawler(department, index, i, i)
                 await asyncio.sleep(1.0)
 
 
@@ -20,7 +20,7 @@ async def main_school_crawler():
     department = Department.SCHOOL
     for index in range(0, department.board_len()):
         for i in range(1, await get_school_last_page(*department.code[index]) + 1):
-            await school_crawler.board_crawler(department, index, i, i)
+            await school_crawler.manual_board_crawler(department, index, i, i)
             await asyncio.sleep(1.0)
 
 
@@ -28,7 +28,7 @@ async def main_dorm_crawler():
     department = Department.DORM
     for index in range(0, department.board_len()):
         for i in range(1, await get_dorm_last_page(department.code[index]) + 1):
-            await dorm_crawler.board_crawler(department, index, i, i)
+            await dorm_crawler.manual_board_crawler(department, index, i, i)
             await asyncio.sleep(1.0)
 
 

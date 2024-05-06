@@ -19,6 +19,15 @@ from app.logs import crawling_log
 
 
 async def article_parser(department: Department, session, data: Board):
+    """
+    Article parser
+
+    This function parse article from article list
+
+    :param department: department to crawl
+    :param session: aiohttp session
+    :param data: article list to parse
+    """
     client = edgedb_client()
     now = datetime.now()
 
@@ -151,7 +160,19 @@ async def article_parser(department: Department, session, data: Board):
     client.close()
 
 
-async def board_page_crawler(session, department: Department, board_index: int, page: int, ignore_date=False):
+async def article_list_crawler(session, department: Department, board_index: int, page: int, ignore_date=False):
+    """
+    Article list crawler
+
+    This function crawl article list from page
+
+    :param session: aiohttp session
+    :param department: department to crawl
+    :param board_index: index of board
+    :param page: page to crawl
+    :param ignore_date: if is True, crawl all articles, for manual crawling
+    :return: article list
+    """
     board = department.code[board_index]
 
     board_list = []
@@ -211,11 +232,17 @@ async def board_page_crawler(session, department: Department, board_index: int, 
         if datetime.today() - timedelta(days=7) > date_of_last_article:
             return board_list
         else:
-            board_list.extend(await board_page_crawler(session, department, board_index, page + 1))
+            board_list.extend(await article_list_crawler(session, department, board_index, page + 1))
             return board_list
 
 
 async def board_remove_notice(department: Department, board: str):
+    """
+    Set notice articles to normal articles
+
+    :param department: department to crawl
+    :param board: board to crawl
+    """
     client = edgedb_client()
 
     client.query("""
@@ -228,21 +255,42 @@ async def board_remove_notice(department: Department, board: str):
     """, department=department.department, board=board)
 
 
-async def board_crawler(department: Department, board_index: int, start_page: int, last_page: int):
-    # limit TCPConnector to 10 for avoid ServerDisconnectedError
-    # Enable force_close to disable HTTP Keep-Alive
-    connector = aiohttp.TCPConnector(limit=10, force_close=True)
-    async with aiohttp.ClientSession(connector=connector) as session:
-        board_list = await board_list_crawler(session, department, board_index, start_page, last_page)
+async def parse_article_from_list(department, session, board_list):
+    """
+    Parse article from board list
 
-        await board_crawler_task(department, session, board_list)
+    This function will call real article_parser
+    :param department: department to crawl
+    :param session: aiohttp session
+    :param board_list: board list to parse
+    """
+    tasks = [asyncio.ensure_future(article_parser(department, session, data)) for data in board_list]
+    result = await gather_with_concurrency(100, *tasks)
+
+    failed_data = [i for i in result if i is not None]
+    failed_data = [i.data for i in failed_data]
+
+    if failed_data:
+        await parse_article_from_list(department, session, failed_data)
 
 
-async def board_list_crawler(session, department: Department, board_index: int, start_page: int, last_page: int):
+async def manual_board_list_crawler(session, department: Department, board_index: int, start_page: int, last_page: int):
+    """
+    Board list crawler for manual crawling
+
+    This function crawl article list of board from start_page to last_page
+
+    :param session: aiohttp session
+    :param department: department to crawl
+    :param board_index: index of board
+    :param start_page: start page to crawl
+    :param last_page: last page to crawl
+    :return: board list from start_page to last_page
+    """
     board_list = []
     failed_page = []
 
-    pages = [asyncio.ensure_future(board_page_crawler(session, department, board_index, page, True)) for page in
+    pages = [asyncio.ensure_future(article_list_crawler(session, department, board_index, page, True)) for page in
              range(start_page, last_page + 1)]
     datas = await gather_with_concurrency(100, *pages)
     for data in datas:
@@ -254,23 +302,41 @@ async def board_list_crawler(session, department: Department, board_index: int, 
     failed_page.sort()
 
     if failed_page:
-        board_list.extend(await board_list_crawler(session, department, board_index, failed_page[0], failed_page[-1]))
+        board_list.extend(
+            await manual_board_list_crawler(session, department, board_index, failed_page[0], failed_page[-1]))
 
     return board_list
 
 
-async def board_crawler_task(department, session, board_list):
-    tasks = [asyncio.ensure_future(article_parser(department, session, data)) for data in board_list]
-    result = await gather_with_concurrency(100, *tasks)
+async def manual_board_crawler(department: Department, board_index: int, start_page: int, last_page: int):
+    """
+    Board crawler for manual crawling
 
-    failed_data = [i for i in result if i is not None]
-    failed_data = [i.data for i in failed_data]
+    This function should define start_page and last_page to crawl
 
-    if failed_data:
-        await board_crawler_task(department, session, failed_data)
+    :param department: department to crawl
+    :param board_index: index of board
+    :param start_page: start page to crawl
+    :param last_page: last page to crawl
+    """
+    # limit TCPConnector to 10 for avoid ServerDisconnectedError
+    # Enable force_close to disable HTTP Keep-Alive
+    connector = aiohttp.TCPConnector(limit=10, force_close=True)
+    async with aiohttp.ClientSession(connector=connector) as session:
+        board_list = await manual_board_list_crawler(session, department, board_index, start_page, last_page)
+
+        await parse_article_from_list(department, session, board_list)
 
 
 async def sched_board_crawler(department: Department, board_index: int):
+    """
+    Board crawler for scheduled crawling
+
+    This function will crawl new articles only
+
+    :param department: department to crawl
+    :param board_index: index of board
+    """
     old_count = get_article_count(department, department.boards[board_index].board)
 
     # Before start crawling, remove all notice
@@ -280,9 +346,9 @@ async def sched_board_crawler(department: Department, board_index: int):
     # Enable force_close to disable HTTP Keep-Alive
     connector = aiohttp.TCPConnector(limit=10, force_close=True)
     async with aiohttp.ClientSession(connector=connector) as session:
-        board_list = await board_page_crawler(session, department, board_index, 1)
+        board_list = await article_list_crawler(session, department, board_index, 1)
 
-        await board_crawler_task(department, session, board_list)
+        await parse_article_from_list(department, session, board_list)
 
     new_count = get_article_count(department, department.boards[board_index].board)
 
