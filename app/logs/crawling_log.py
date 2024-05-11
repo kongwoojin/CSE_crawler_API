@@ -57,7 +57,7 @@ def main_crawler_finished_log():
 
 def article_remove_log(department: Department, board: str, title: str):
     caller = os.path.splitext(os.path.basename(inspect.stack()[1].filename))[0]
-    print("{} {:<24}: {} in {} of {} removed from database".format(current_time(), caller, title, board, department))
+    print("{} {:<24}: {} in {} of {} removed from database".format(current_time(), caller, title, board, department.name))
 
 
 def current_time():
