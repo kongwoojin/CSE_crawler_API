@@ -57,11 +57,9 @@ async def get_dorm_last_page(board):
                 soup = BeautifulSoup(html, 'html.parser')
 
                 try:
-                    page = soup.select_one(".paging > li:nth-child(6) > a:nth-child(1)").get("href")
-                    pattern = r"now_page=(\d+)"
-                    match = re.search(pattern, page)
-                    return int(match.group(1))
-
+                    page_text = soup.select_one("#board > p.listCount").text.replace(",", "")
+                    matches = re.findall(r"\d+(?:\.\d+)?", page_text)
+                    return int(matches[2])
                 except AttributeError:
                     crawling_log.unknown_last_page_error(str(resp.url))
                     return 1
