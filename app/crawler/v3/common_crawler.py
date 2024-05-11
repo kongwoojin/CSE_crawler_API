@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 import edgedb
 
 from app.crawler.v3 import headers, gather_with_concurrency, ServerRefusedError, DAYS_TO_PARSE
-from app.crawler.v3.utils.get_article_count import get_article_count
+from app.crawler.v3.utils.get_article_count import get_article_count, get_notice_article_count
 from app.dataclass.board import Board
 from app.dataclass.enums.department import Department
 from app.db.v3 import edgedb_client
@@ -312,7 +312,8 @@ async def manual_board_list_crawler(session, department: Department, board_index
     failed_page.sort()
 
     if failed_page:
-        board_list.extend(await manual_board_list_crawler(session, department, board_index, failed_page[0], failed_page[-1]))
+        board_list.extend(
+            await manual_board_list_crawler(session, department, board_index, failed_page[0], failed_page[-1]))
 
     return board_list
 
@@ -363,3 +364,115 @@ async def sched_board_crawler(department: Department, board_index: int):
 
     if new_count - old_count > 0:
         await send_fcm_message(department, department.boards[board_index].board)
+
+    await check_article_removed(department, board_index)
+
+
+async def remove_article(session, department: Department, board_index: int, notice_count: int, board_list=None,
+                         page: int = 1):
+    """
+    Remove article from database which removed from board
+    :param notice_count: Count of notice article
+    :param board_index: Index of board
+    :param session: aiohttp session
+    :param department: department
+    :param board_list: board list
+    :param page: page of board
+    """
+    if board_list is None:
+        board_list = await article_list_crawler(session, department, board_index, page, ignore_date=True)
+
+    client = edgedb_client()
+    get_notice_article_query = """
+        SELECT notice 
+            { id, num, title, writer, write_date, read_count, 
+            is_new := .init_crawled_time = .update_crawled_time, is_notice, article_url }
+            FILTER .department=<Department><str>$department AND .board=<Board><str>$board AND .is_notice=True order by 
+            .write_date DESC THEN .num desc
+        """
+
+    get_article_query = """
+        SELECT notice 
+            { id, num, title, writer, write_date, read_count, 
+            is_new := .init_crawled_time = .update_crawled_time, is_notice, article_url }
+            FILTER .department=<Department><str>$department AND .board=<Board><str>$board AND .is_notice=False order by 
+            .write_date DESC
+            THEN .num desc offset <int64>$offset limit <int64>$num_of_items
+        """
+
+    num_of_items = 20
+
+    db_board_list = (client.query(get_notice_article_query, department=department.department,
+                                  board=department.boards[board_index].board)
+                     + client.query(get_article_query, department=department.department,
+                                    board=department.boards[board_index].board,
+                                    offset=(page - 1) * num_of_items, num_of_items=num_of_items - notice_count))
+
+    i = 0
+    while i < num_of_items:
+        article = board_list[i]
+        db_article = db_board_list[i]
+
+        if article.article_url != db_article.article_url:
+            crawling_log.article_remove_log(department, department.boards[board_index].board, db_article.title)
+            client.query("DELETE notice filter .id=<uuid>$id", id=db_article.id)
+            await remove_article(session, department, board_index, notice_count, board_list, page)
+            return
+        i += 1
+
+    is_removed = await compare_article_count(session, department, board_index)
+
+    if is_removed:
+        await remove_article(session, department, board_index, notice_count, None, page + 1)
+
+
+async def compare_article_count(session, department: Department, board_index: int) -> bool:
+    """
+    Compare article count between database and board
+    :param session: aiohttp session
+    :param department: department
+    :param board_index: index of board
+    """
+    article_count_in_db = get_article_count(department, department.boards[board_index].board)
+
+    mid, board_id = department.code[board_index]
+
+    url = f"https://www.koreatech.ac.kr/board.es?mid={mid}&bid={board_id}&nPage=1"
+
+    try:
+        async with session.get(url, headers=headers) as resp:
+            # add small delay for avoid ServerDisconnectedError
+            await asyncio.sleep(0.01)
+            if resp.status == 200:
+                html = await resp.text()
+                soup = BeautifulSoup(html, 'html.parser')
+
+                article_count_text = soup.select_one(
+                    "#contents_body > div.board_info > p > span.total > b").text.replace(",", "")
+                article_count = get_notice_article_count(department, department.boards[board_index].board)
+                match = re.search(r"\d+(?:\.\d+)?", article_count_text)
+                if match:
+                    article_count += int(match.group(0))
+
+                if article_count_in_db > article_count:
+                    return True
+                else:
+                    return False
+
+    except Exception as e:
+        crawling_log.unknown_exception_error(e)
+        return False
+
+
+async def check_article_removed(department: Department, board_index: int):
+    """
+    Check article removed from board
+    :param department: department
+    :param board_index: index of board
+    """
+    notice_article_count_in_db = get_notice_article_count(department, department.boards[board_index].board)
+    connector = aiohttp.TCPConnector(limit=10, force_close=True)
+    async with aiohttp.ClientSession(connector=connector) as session:
+        is_removed = await compare_article_count(session, department, board_index)
+        if is_removed:
+            await remove_article(session, department, board_index, notice_article_count_in_db)

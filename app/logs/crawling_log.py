@@ -55,5 +55,10 @@ def main_crawler_finished_log():
     print("{} {:<24}: Main crawler Finished".format(current_time(), caller))
 
 
+def article_remove_log(department: Department, board: str, title: str):
+    caller = os.path.splitext(os.path.basename(inspect.stack()[1].filename))[0]
+    print("{} {:<24}: {} in {} of {} removed from database".format(current_time(), caller, title, board, department))
+
+
 def current_time():
     return time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
