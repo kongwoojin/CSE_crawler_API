@@ -3,6 +3,7 @@ import re
 import aiohttp
 from bs4 import BeautifulSoup
 
+from app.crawler.v3 import headers
 from app.logs import crawling_log
 
 
@@ -48,18 +49,18 @@ async def get_school_last_page(mid: str, board_id: str):
                 return 1
 
 
-async def get_dorm_last_page(board):
+async def get_dorm_last_page(mid: str, board_name: str):
     async with aiohttp.ClientSession() as session:
         async with session.get(
-                f"https://dorm.koreatech.ac.kr/content/board/list.php?now_page=&GUBN=&SEARCH=&BOARDID={board}") as resp:
+                f"https://dorm.koreatech.ac.kr/ko/{mid}/board/{board_name}/", headers=headers) as resp:
             if resp.status == 200:
                 html = await resp.text()
                 soup = BeautifulSoup(html, 'html.parser')
 
                 try:
-                    page_text = soup.select_one("#board > p.listCount").text.replace(",", "")
+                    page_text = soup.select_one("body > div.subBoard > div > div.boardPage > a:last-child").get("href")
                     matches = re.findall(r"\d+(?:\.\d+)?", page_text)
-                    return int(matches[2])
+                    return int(matches[0])
                 except AttributeError:
                     crawling_log.unknown_last_page_error(str(resp.url))
                     return 1

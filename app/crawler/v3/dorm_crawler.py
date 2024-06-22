@@ -12,6 +12,7 @@ import edgedb
 from app.crawler.v3 import headers, gather_with_concurrency, ServerRefusedError, DAYS_TO_PARSE
 from app.crawler.v3.utils.get_article_count import get_article_count
 from app.dataclass.board import Board
+from app.dataclass.enums.category import get_dorm_category
 from app.dataclass.enums.department import Department
 from app.db.v3 import edgedb_client
 from app.firebase.send_message import send_fcm_message
@@ -32,7 +33,7 @@ async def article_parser(department: Department, session, data: Board):
     now = datetime.now()
 
     board = data.board
-    pattern = r"SEQ=(\d+)"
+    pattern = r"idx=(\d+)"
     match = re.search(pattern, data.article_url)
     num = int(match.group(1))
     is_notice = data.is_notice
@@ -49,23 +50,27 @@ async def article_parser(department: Department, session, data: Board):
                 file_list = []
 
                 try:
-                    title_parsed = soup.select_one("#board > div.boardViewer > h4").text.strip()
+                    title_parsed = soup.select_one("body > div.subBoard > div > div.board__view > h3").text.strip()
                     text_parsed = soup.select_one(
-                        "#board > div.boardViewer > table.viewer div.story").decode_contents()
+                        "body > div.subBoard > div > div.board__view > div.board__contents").decode_contents()
                     text_parsed = text_parsed.replace("<img", "<br><img")
                     writer_parsed = soup.select_one(
-                        "#board > div.boardViewer > table.viewer > tr > td:nth-child(2)").text.strip()
+                        "body > div.subBoard > div > div.board__view > div.board__info > div.view__userinfo > "
+                        "div.view__user > p > span").text.replace(":", "").strip()
                     write_date_parsed = soup.select_one(
-                        "#board > div.boardViewer > table.viewer > tr > td:nth-child(4)").text.strip()
+                        "body > div.subBoard > div > div.board__view > div.board__info > div.view__userinfo > "
+                        "div.view__date > p > span").text.replace("(", "").replace(")", "").strip()
                     write_date_parsed = datetime.strptime(write_date_parsed, '%Y-%m-%d')
                     read_count_parsed = int(soup.select_one(
-                        "#board > div.boardViewer > table.viewer > tr > td:nth-child(6)").text.strip())
+                        "body > div.subBoard > div > div.board__view > div.board__info > div.view__read > p > "
+                        "span:nth-child(2)").text.replace(":", "").strip())
 
-                    files = soup.select("#board > div.boardViewer > table.viewer tr:nth-child(3) > td > a")
+                    files = soup.select("body > div.subBoard > div > div.board__view > div.board__file > "
+                                        "div.board__fileBox > div > p")
 
                     for file in files:
-                        file_url = file["href"]
-                        file_name = file.text
+                        file_url = file.select_one("a").get("href")
+                        file_name = file.select_one("span").text.strip()
                         file_name = re.sub("\[.*]", "", file_name).strip()
 
                         file_dic = {
@@ -96,7 +101,7 @@ async def article_parser(department: Department, session, data: Board):
                         update_crawled_time:=<cal::local_datetime>$crawled_time,
                         notice_start_date:=<cal::local_date>$write_date,
                         notice_end_date:=<cal::local_date>'9999-12-31',
-                        category:=<Category>Category.NONE,  
+                        category:=<Category><str>$category,
                         files := (with
                                   raw_data := <json>$file_data,
                                   for item in json_array_unpack(raw_data) union (
@@ -116,7 +121,7 @@ async def article_parser(department: Department, session, data: Board):
                 """, board=board, num=num, title=title_parsed, writer=writer_parsed, is_notice=is_notice,
                                  write_date=write_date_parsed, read_count=read_count_parsed,
                                  article_url=data.article_url, content=text_parsed, crawled_time=now,
-                                 file_data=json.dumps(file_list))
+                                 category=data.category.category, file_data=json.dumps(file_list))
 
                 except edgedb.errors.ConstraintViolationError:
                     client.query("""
@@ -173,13 +178,13 @@ async def article_list_crawler(session, department: Department, board_index: int
     :param ignore_date: if is True, crawl all articles, for manual crawling
     :return: article list
     """
-    board = department.code[board_index]
+    mid, board_name = department.code[board_index]
 
     board_list = []
 
     crawling_log.board_crawling_log(department.name, department.boards[board_index].name, page)
 
-    url = f"https://dorm.koreatech.ac.kr/content/board/list.php?now_page={page}&GUBN=&SEARCH=&BOARDID={board}"
+    url = f"https://dorm.koreatech.ac.kr/ko/{mid}/board/{board_name}/?pageIndex={page}"
 
     date_of_last_article = 0
 
@@ -191,21 +196,22 @@ async def article_list_crawler(session, department: Department, board_index: int
                 html = await resp.text()
                 soup = BeautifulSoup(html, 'html.parser')
 
-                posts = soup.select("#board > table > tbody > tr")
+                posts = soup.select("body > div.subBoard > div > table > tbody > tr")
 
                 for post in posts:
                     try:
-                        notice = post.select_one("td").text.strip()
-                        if notice == "[공지]":
+                        notice = post.select_one("td.number").text.strip()
+                        if notice == "공지":
                             is_notice = True
                         else:
                             is_notice = False
 
-                        article_url_parsed = post.select_one("td:nth-child(2) > a").get('href')
-                        article_url_parsed = re.sub("&now_page=\d*", "", article_url_parsed)
-                        article_url_parsed = f"https://dorm.koreatech.ac.kr/content/board/{article_url_parsed}"
-                        write_date_parsed = post.select_one("td:nth-child(4)").text.strip()
+                        article_url_parsed = post.select_one("td.title > a").get('href')
+                        article_url_parsed = re.sub("&pageIndex=\d*", "", article_url_parsed)
+                        article_url_parsed = f"https://dorm.koreatech.ac.kr{article_url_parsed}"
+                        write_date_parsed = post.select_one("td.date").text.strip()
                         write_date_parsed = datetime.strptime(write_date_parsed, '%Y-%m-%d')
+                        category_parsed = post.select_one("td.category").text.strip()
 
                         date_of_last_article = write_date_parsed
 
@@ -216,7 +222,8 @@ async def article_list_crawler(session, department: Department, board_index: int
                         board_list.append(Board(
                             board=department.boards[board_index].name,
                             article_url=article_url_parsed,
-                            is_notice=is_notice
+                            is_notice=is_notice,
+                            category=get_dorm_category(category_parsed)
                         ))
                     except AttributeError:
                         crawling_log.no_article_error(url)
@@ -413,9 +420,9 @@ async def compare_article_count(session, department: Department, board_index: in
     """
     article_count_in_db = get_article_count(department, department.boards[board_index].board)
 
-    board = department.code[board_index]
+    mid, board_name = department.code[board_index]
 
-    url = f"https://dorm.koreatech.ac.kr/content/board/list.php?now_page=1&GUBN=&SEARCH=&BOARDID={board}"
+    url = f"https://dorm.koreatech.ac.kr/ko/{mid}/board/{board_name}/"
 
     try:
         async with session.get(url, headers=headers) as resp:
@@ -425,11 +432,9 @@ async def compare_article_count(session, department: Department, board_index: in
                 html = await resp.text()
                 soup = BeautifulSoup(html, 'html.parser')
 
-                article_count_text = soup.select_one("#board > p.listCount").text.replace(",", "")
-                article_count = 0
-                match = re.search(r"\d+(?:\.\d+)?", article_count_text)
-                if match:
-                    article_count = int(match.group(0))
+                article_count_text = soup.select_one("body > div.subBoard > div > div.boardSearch > form > fieldset > "
+                                                     "div > p > span").text.strip()
+                article_count = int(article_count_text)
 
                 if article_count_in_db > article_count:
                     return True

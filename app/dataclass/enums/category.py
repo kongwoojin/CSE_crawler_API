@@ -16,6 +16,15 @@ def get_category(text: str):
         return Category.ETC
 
 
+def get_dorm_category(text: str):
+    if "안전" in text:
+        return Category.DORM_SAFETY
+    elif "모집" in text:
+        return Category.DORM_RECRUITMENT
+    else:
+        return Category.DORM_NOTICE
+
+
 class Category(Enum):
     NONE = "NONE"
     NOTICE = "NOTICE"
@@ -23,6 +32,9 @@ class Category(Enum):
     CA = "CA"  # Campus Activity
     WORK = "WORK"
     ETC = "ETC"
+    DORM_NOTICE = "DORM_NOTICE"
+    DORM_SAFETY = "DORM_SAFETY"
+    DORM_RECRUITMENT = "DORM_RECRUITMENT"
 
     def __init__(self, category):
         self.category = category
