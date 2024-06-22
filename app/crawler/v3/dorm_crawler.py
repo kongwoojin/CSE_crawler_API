@@ -2,6 +2,7 @@ import json
 import re
 
 import asyncio
+import time
 
 import aiohttp
 from aiohttp import ClientConnectorError
@@ -33,9 +34,6 @@ async def article_parser(department: Department, session, data: Board):
     now = datetime.now()
 
     board = data.board
-    pattern = r"idx=(\d+)"
-    match = re.search(pattern, data.article_url)
-    num = int(match.group(1))
     is_notice = data.is_notice
     crawling_log.article_crawling_log(data, department.name)
 
@@ -67,6 +65,10 @@ async def article_parser(department: Department, session, data: Board):
 
                     files = soup.select("body > div.subBoard > div > div.board__view > div.board__file > "
                                         "div.board__fileBox > div > p")
+
+                    num = int(write_date_parsed.strftime(
+                        "%y")) * 100000000 + write_date_parsed.month * 1000000 + write_date_parsed.day * 10000 + int(
+                        float(str(time.time())[6:11]))
 
                     for file in files:
                         file_url = file.select_one("a").get("href")
@@ -332,7 +334,7 @@ async def manual_board_crawler(department: Department, board_index: int, start_p
     async with aiohttp.ClientSession(connector=connector) as session:
         board_list = await manual_board_list_crawler(session, department, board_index, start_page, last_page)
 
-        await parse_article_from_list(department, session, board_list)
+        await parse_article_from_list(department, session, board_list[::-1])
 
 
 async def sched_board_crawler(department: Department, board_index: int):
@@ -355,7 +357,7 @@ async def sched_board_crawler(department: Department, board_index: int):
     async with aiohttp.ClientSession(connector=connector) as session:
         board_list = await article_list_crawler(session, department, board_index, 1)
 
-        await parse_article_from_list(department, session, board_list)
+        await parse_article_from_list(department, session, board_list[::-1])
 
     new_count = get_article_count(department, department.boards[board_index].board)
 
