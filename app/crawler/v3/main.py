@@ -29,6 +29,8 @@ async def main_dorm_crawler():
 async def main_crawler():
     main_crawler_start_log()
     await asyncio.gather(
+        main_school_crawler(),
         main_dorm_crawler(),
+        main_common_crawler()
     )
     main_crawler_finished_log()
