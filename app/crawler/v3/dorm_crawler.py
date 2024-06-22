@@ -66,9 +66,12 @@ async def article_parser(department: Department, session, data: Board):
                     files = soup.select("body > div.subBoard > div > div.board__view > div.board__file > "
                                         "div.board__fileBox > div > p")
 
-                    num = int(write_date_parsed.strftime(
-                        "%y")) * 100000000 + write_date_parsed.month * 1000000 + write_date_parsed.day * 10000 + int(
-                        float(str(time.time())[6:11]))
+                    year = write_date_parsed.strftime("%y")
+                    year_new = int(year[0]) + int(year[1])
+                    month = write_date_parsed.month
+                    day = write_date_parsed.day
+
+                    num = year_new * 100000000 + month * 1000000 + day * 10000 + int(float(str(time.time())[6:10]))
 
                     for file in files:
                         file_url = file.select_one("a").get("href")
