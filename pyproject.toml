@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "koreatech-board-crawler"
+version = "1.0.0"
+description = "Koreatech board crawler written in Python"
+authors = ["WooJin Kong <kongwoojin03@gmail.com>"]
+license = "MIT License"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+bs4 = "^0.0.1"
+edgedb = "^1.7.0"
+rocketry = "^2.5.1"
+aiohttp = "^3.8.6"
+pydantic = "1.10.10"
+python-dotenv = "^1.0.1"
+firebase-admin = "^6.5.0"
+
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
